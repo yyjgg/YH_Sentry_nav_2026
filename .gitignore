@@ -1,0 +1,66 @@
+# ROS2 build artifacts
+build/
+install/
+log/
+
+# Colcon build system
+.colcon/
+
+# ROS related
+/ros/
+/.ros/
+
+# CMake build artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+compile_commands.json
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.code-workspace
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+
+# Temporary and swap files
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Auto-generated files
+launch_params_*
+
+# TF tree Graphviz outputs
+frames_*.gv
+frames_*.pdf
+
+# Compiled object files
+*.o
+*.obj
+
+# Compiled dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled static libraries
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Build directories
+dist/
+bin/
+tmp

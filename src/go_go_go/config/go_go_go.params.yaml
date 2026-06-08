@@ -1,0 +1,60 @@
+go_go_go_node:
+  ros__parameters:
+    odom_to_map_x: 3.5
+    odom_to_map_y: 7.5
+    odom_to_map_yaw: 0.0
+    sign_x: 9.8
+    sign_y: 11.8
+
+    # 先右后左
+    right_patrol_x: 10.7
+    right_patrol_y: 12.0
+    left_patrol_x: 9.5
+    left_patrol_y: 3.4
+    # 先左后右
+    # left_patrol_x: 10.7
+    # left_patrol_y: 12.0
+    # right_patrol_x: 9.5
+    # right_patrol_y: 3.4
+
+    front_patrol_x: 13.8
+    front_patrol_y: 4.9
+    back_patrol_x: 3.6
+    back_patrol_y: 7.5
+    origin_x: 2.7
+    origin_y: 0.8
+    max_lin_speed: 0.7
+    max_lin_accel: 0.8
+
+#test
+    # sign_x: 5.4
+    # sign_y: 8.5
+    # left_patrol_x: 4.9
+    # left_patrol_y: 9.5
+    # right_patrol_x: 5.9
+    # right_patrol_y: 7.5
+    # front_patrol_x: 13.8
+    # front_patrol_y: 4.9
+    # back_patrol_x: 3.6
+    # back_patrol_y: 7.5
+    # origin_x: 2.9
+    # origin_y: 7.0
+    # max_lin_speed: 0.7
+    # max_lin_accel: 0.8
+    # 二级台阶
+    # right_patrol_x: 9.7
+    # right_patrol_y: 10.8
+
+
+
+
+
+
+
+
+
+
+
+
+
+    

@@ -1,0 +1,15 @@
+path_planning_node:
+  ros__parameters:
+    odom_to_map_x: 3.5
+    odom_to_map_y: 7.5
+    odom_to_map_yaw: 0.0
+    maptransform_x: -0.9
+    maptransform_y: -0.55
+    global_z_min: -1.0
+    global_z_max: 1.0
+    local_z_min: -0.25
+    local_z_max: 0.8
+    grid_radius: 4
+    map_size_x: 280
+    map_size_y: 150
+    enable_load_global_map_from_pcd: true
