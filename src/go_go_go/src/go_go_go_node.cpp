@@ -373,54 +373,26 @@ private:
             return;
         }
         
-        // 改进的轨迹点查找逻辑：使用带前视距离的自适应查找
-        double current_speed_odom = std::sqrt(vx * vx + vy * vy);
-        
-        // 基础前视距离（根据速度动态调整，并考虑路径曲率）
-        double lookahead_distance = calculateAdaptiveLookaheadDistance(x, y, current_speed_odom);
-        
-        // 确保前视距离不会太大（不超过轨迹长度的1/3）
-        double max_lookahead = traj_matrix_.rows() > 1 ? 
-            (traj_matrix_.rows() - 1) * 0.1 : 0.3; // 粗略估计平均点间距
-        lookahead_distance = std::min(lookahead_distance, max_lookahead);
-        
-        // 从上次找到的索引开始搜索，限制搜索范围
+        // 轨迹点查找：直接使用最近点作为MPC参考起点
+        // MPC自带预测时域(N=20步)，Q矩阵的位置权重会驱动跟踪前方轨迹，
+        // 不需要额外的pure pursuit前视——那会跳过近处轨迹点，造成信息丢失
         int start_index = std::max(0, last_traj_index_ - 10);
         int end_index = std::min(static_cast<int>(traj_matrix_.rows() - 1), last_traj_index_ + 50);
-        
-        // 先找到最近的点
+
         double min_distance = 1e10;
-        int closest_index = start_index;
-        
+        int target_index = start_index;
+
         for (int i = start_index; i <= end_index; i++) {
             Eigen::Vector2d traj_point(traj_matrix_(i, 0), traj_matrix_(i, 1));
             Eigen::Vector2d current_pos_2d(x, y);
             double distance = (current_pos_2d - traj_point).norm();
-            
+
             if (distance < min_distance) {
                 min_distance = distance;
-                closest_index = i;
-            }
-        }
-        
-        // 从最近点开始向前查找满足前视距离的点
-        int target_index = closest_index;
-        for (int i = closest_index; i < static_cast<int>(traj_matrix_.rows()); i++) {
-            Eigen::Vector2d traj_point(traj_matrix_(i, 0), traj_matrix_(i, 1));
-            Eigen::Vector2d current_pos_2d(x, y);
-            double distance = (current_pos_2d - traj_point).norm();
-            
-            if (distance >= lookahead_distance) {
-                target_index = i;
-                break;
-            }
-            // 如果到达最后一个点，就使用它
-            if (i == static_cast<int>(traj_matrix_.rows() - 1)) {
                 target_index = i;
             }
         }
-        
-        // 更新上次索引用于下次搜索
+
         last_traj_index_ = target_index;
         
         if (target_index < 0 || target_index >= static_cast<int>(traj_matrix_.rows())) {
@@ -433,8 +405,7 @@ private:
                                  traj_matrix_(traj_matrix_.rows() - 1, 1));
         Eigen::Vector2d current_pos_2d(x, y);
         double distance_to_goal = (current_pos_2d - goal_pos).norm();
-        double current_speed = current_speed_odom; // 使用已计算的速度
-        
+
         // 添加提前停靠逻辑 - 当距离终点很近时，不再执行MPC而是直接发布零速度
         double EARLY_STOP_THRESHOLD = 0.15; // 提前停止阈值
         
@@ -882,97 +853,6 @@ private:
         // 重置轨迹索引，确保下一次从头开始查找
         last_traj_index_ = 0;
     }
-    
-    // 根据路径曲率和当前速度计算自适应前视距离
-    double calculateAdaptiveLookaheadDistance(double current_x, double current_y, double current_speed) {
-        // 基础前视距离
-        double base_lookahead = 0.2 + 0.2 * current_speed;  // 稍微增加基础前视距离
-        if (traj_matrix_.rows() < 3) {
-            // 如果轨迹点太少，使用固定前视距离
-            return base_lookahead;
-        }
-        
-        // 找到当前最近的轨迹点
-        int nearest_idx = findNearestTrajectoryIndex(current_x, current_y);
-        if (nearest_idx < 0) return base_lookahead;
-        
-        // 计算路径曲率（通过前后点的方向变化来估算）
-        double curvature = calculatePathCurvature(nearest_idx);
-        
-        // 根据曲率调整前视距离
-        // 在高曲率区域（急转弯）减小前视距离，以提高响应速度
-        // 在低曲率区域（直线段）增加前视距离，以提高稳定性
-        double curvature_factor = 1.0;
-        if (curvature > 0.8) {
-            curvature_factor = 0.2;  // 高曲率区域，大幅减小前视距离
-        } else if (curvature > 0.5) {
-            curvature_factor = 0.5;  // 中等曲率区域，适度减小前视距离
-        } else if (curvature > 0.2) {
-            curvature_factor = 1.0;  // 低曲率区域，稍微减小前视距离
-        } else {
-            curvature_factor = 1.2;  // 直线区域，增加前视距离
-        }
-        
-        double adaptive_lookahead = base_lookahead * curvature_factor;
-        
-        // 限制前视距离在合理范围内
-        adaptive_lookahead = std::max(0.1, std::min(adaptive_lookahead, 1.0));
-        
-        return adaptive_lookahead;
-    }
-    
-    // 找到最近的轨迹点索引
-    int findNearestTrajectoryIndex(double x, double y) {
-        if (traj_matrix_.rows() == 0) return -1;
-        
-        double min_dist = std::numeric_limits<double>::max();
-        int nearest_idx = 0;
-        
-        for (int i = 0; i < static_cast<int>(traj_matrix_.rows()); i++) {
-            double dx = traj_matrix_(i, 0) - x;
-            double dy = traj_matrix_(i, 1) - y;
-            double dist = dx*dx + dy*dy;
-            
-            if (dist < min_dist) {
-                min_dist = dist;
-                nearest_idx = i;
-            }
-        }
-        
-        return nearest_idx;
-    }
-    
-    // 计算路径在指定点的曲率（通过前后点的方向变化来估算）
-    double calculatePathCurvature(int idx) {
-        if (idx <= 0 || idx >= static_cast<int>(traj_matrix_.rows() - 1)) {
-            return 0.0;
-        }
-        
-        // 获取前一个点、当前点和后一个点
-        Eigen::Vector2d prev_pt(traj_matrix_(idx-1, 0), traj_matrix_(idx-1, 1));
-        Eigen::Vector2d curr_pt(traj_matrix_(idx, 0), traj_matrix_(idx, 1));
-        Eigen::Vector2d next_pt(traj_matrix_(idx+1, 0), traj_matrix_(idx+1, 1));
-        
-        // 计算两个方向向量
-        Eigen::Vector2d vec1 = curr_pt - prev_pt;
-        Eigen::Vector2d vec2 = next_pt - curr_pt;
-        
-        // 归一化向量
-        if (vec1.norm() < 1e-6 || vec2.norm() < 1e-6) {
-            return 0.0;
-        }
-        
-        vec1.normalize();
-        vec2.normalize();
-        
-        // 计算方向变化的角度（弧度）
-        double angle_change = std::acos(std::max(-1.0, std::min(1.0, vec1.dot(vec2))));
-        
-        // 曲率可以简单地用角度变化来衡量，也可以进一步处理
-        // 这里我们使用角度变化作为曲率的衡量标准
-        return angle_change / M_PI;  // 归一化到 [0, 1] 范围
-    }
-    
     // TF2相关成员变量
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
