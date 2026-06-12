@@ -45,8 +45,8 @@ namespace small_point_lio {
 
     private:
         void pointcloud_callback(const livox_ros_driver2::msg::CustomMsg &msg);
-
         void imu_callback(const sensor_msgs::msg::Imu &msg);
+        
     };
 
 }// namespace small_point_lio

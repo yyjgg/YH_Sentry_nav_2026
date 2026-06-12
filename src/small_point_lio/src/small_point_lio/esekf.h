@@ -26,16 +26,16 @@ namespace small_point_lio {
         constexpr static int bg_index = 24;
         constexpr static int ba_index = 27;
 
-        Eigen::Matrix<value_type, 3, 1> position = Eigen::Matrix<value_type, 3, 1>::Zero();        // 位置
-        Eigen::Matrix<value_type, 3, 3> rotation = Eigen::Matrix<value_type, 3, 3>::Identity();    // 旋转
+        Eigen::Matrix<value_type, 3, 1> position = Eigen::Matrix<value_type, 3, 1>::Zero();        // 位置，世界坐标系
+        Eigen::Matrix<value_type, 3, 3> rotation = Eigen::Matrix<value_type, 3, 3>::Identity();    // 旋转，本体->世界坐标系
         Eigen::Matrix<value_type, 3, 3> offset_R_L_I = Eigen::Matrix<value_type, 3, 3>::Identity();// 雷达到 IMU 的 R
         Eigen::Matrix<value_type, 3, 1> offset_T_L_I = Eigen::Matrix<value_type, 3, 1>::Zero();    // 雷达到 IMU 的 T
-        Eigen::Matrix<value_type, 3, 1> velocity = Eigen::Matrix<value_type, 3, 1>::Zero();        // 速度
-        Eigen::Matrix<value_type, 3, 1> omg = Eigen::Matrix<value_type, 3, 1>::Zero();             // 角速度
-        Eigen::Matrix<value_type, 3, 1> acceleration = Eigen::Matrix<value_type, 3, 1>::Zero();    // 加速度
-        Eigen::Matrix<value_type, 3, 1> gravity = Eigen::Matrix<value_type, 3, 1>::Zero();         // 重力
-        Eigen::Matrix<value_type, 3, 1> bg = Eigen::Matrix<value_type, 3, 1>::Zero();              // 陀螺仪零偏
-        Eigen::Matrix<value_type, 3, 1> ba = Eigen::Matrix<value_type, 3, 1>::Zero();              // 加速度零偏
+        Eigen::Matrix<value_type, 3, 1> velocity = Eigen::Matrix<value_type, 3, 1>::Zero();        // 速度,世界坐标系
+        Eigen::Matrix<value_type, 3, 1> omg = Eigen::Matrix<value_type, 3, 1>::Zero();             // 角速度,世界坐标系
+        Eigen::Matrix<value_type, 3, 1> acceleration = Eigen::Matrix<value_type, 3, 1>::Zero();    // 加速度,IMU本体坐标系
+        Eigen::Matrix<value_type, 3, 1> gravity = Eigen::Matrix<value_type, 3, 1>::Zero();         // 重力,IMU本体坐标系
+        Eigen::Matrix<value_type, 3, 1> bg = Eigen::Matrix<value_type, 3, 1>::Zero();              // 陀螺仪零偏,IMU本体坐标系
+        Eigen::Matrix<value_type, 3, 1> ba = Eigen::Matrix<value_type, 3, 1>::Zero();              // 加速度零偏,IMU本体坐标系
 
         state() = default;
 
@@ -52,14 +52,14 @@ namespace small_point_lio {
             ba += vec.block<3, 1>(ba_index, 0);
         }
     };
-
+    //​ ​激光点云观测模型的计算结果
     struct point_measurement_result {
-        bool valid;
-        state::value_type laser_point_cov;
-        state::value_type z;
-        Eigen::Matrix<state::value_type, 1, 12> h_x;
+        bool valid;                                  // 观测是否有效
+        state::value_type laser_point_cov;           // 激光点观测噪声方差
+        state::value_type z;                         // 观测残差（标量）
+        Eigen::Matrix<state::value_type, 1, 12> h_x; // 观测模型的雅可比矩阵（行向量）
     };
-
+    //​ IMU观测模型的计算结果
     struct imu_measurement_result {
         Eigen::Matrix<state::value_type, 6, 1> z;
         Eigen::Matrix<state::value_type, 6, 1> R;
@@ -95,8 +95,8 @@ namespace small_point_lio {
         }
 
         inline void predict_state(state::value_type &dt) {
-            auto f_ = f_x(x);
-            x.plus(f_ * dt);
+            auto f_ = f_x(x); // f是一个30,1的矩阵，即F
+            x.plus(f_ * dt);  // 名义状态更新：x = x + f(x) * Δt
         }
 
         inline void predict_prop_cov(state::value_type &dt, process_noise_covariance &Q) {
@@ -118,7 +118,7 @@ namespace small_point_lio {
             df_dx_.template block<3, 3>(state::offset_R_L_I_index, 0) = res_temp_SO3 * (df_dx_.template block<3, 3>(state::offset_R_L_I_index, 0));
 
             f_x1 += df_dx_ * dt;
-            P = f_x1 * P * (f_x1).transpose() + Q * (dt * dt);
+            P = f_x1 * P * f_x1.transpose() + Q * (dt * dt);
         }
 
         inline bool update_iterated_point() {
@@ -130,6 +130,7 @@ namespace small_point_lio {
             Eigen::Matrix<state::value_type, state::DIM, 1> PHT;
             Eigen::Matrix<state::value_type, state::DIM, 1> K;
             Eigen::Matrix<state::value_type, state::DIM, 1> dx;
+            //P * Hᵀ，只对前12个元素进行更新，位置和姿态​​，以及雷达外参（实际置0）
             PHT.noalias() = P.template block<state::DIM, 12>(0, 0) * measurement_result.h_x.transpose();
             K.noalias() = PHT / (measurement_result.h_x * PHT.topRows(12) + measurement_result.laser_point_cov);
             dx.noalias() = K * measurement_result.z;

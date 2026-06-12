@@ -10,7 +10,10 @@ set(CMAKE_COLOR_DIAGNOSTICS ON)
 
 ## export compile commands for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
+# set build type
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
 # enable compile warning
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter")
@@ -39,10 +42,26 @@ find_package(ament_cmake_auto REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 find_package(OpenMP REQUIRED)
-ament_auto_find_build_dependencies()
+find_package(rclcpp REQUIRED)
+find_package(rclpy REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(pcl_ros REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(livox_ros_driver2 QUIET)
+find_package(tf2_geometry_msgs REQUIRED)
 if(OPENMP_FOUND)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+endif()
+if(livox_ros_driver2_FOUND)
+    message(STATUS "Found livox_ros_driver2, enabling Livox lidar support.")
+    add_definitions(-DHAVE_LIVOX_DRIVER)
+else()
+    message(WARNING "livox_ros_driver2 not found. Building without Livox lidar support.")
 endif()
 
 ###########
@@ -63,6 +82,23 @@ target_link_libraries(${PROJECT_NAME}
     Eigen3::Eigen
     ${PCL_LIBRARIES}
 )
+ament_target_dependencies(${PROJECT_NAME}
+    rclcpp
+    rclpy
+    sensor_msgs
+    geometry_msgs
+    nav_msgs
+    tf2_ros
+    pcl_ros
+    pcl_conversions
+    std_srvs
+    tf2_geometry_msgs
+)
+if(livox_ros_driver2_FOUND)
+    ament_target_dependencies(${PROJECT_NAME}
+        livox_ros_driver2
+    )
+endif()
 
 rclcpp_components_register_node(${PROJECT_NAME}
     PLUGIN small_point_lio::SmallPointLioNode
@@ -92,3 +128,11 @@ ament_auto_package(
     config
     launch
 )
+
+# Install PCD files into package share so runtime can load them via
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/pcd")
+    install(DIRECTORY pcd/
+        DESTINATION share/${PROJECT_NAME}/pcd
+        FILES_MATCHING PATTERN "*.pcd"
+    )
+endif()

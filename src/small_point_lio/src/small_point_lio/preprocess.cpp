@@ -17,14 +17,14 @@ namespace small_point_lio {
     }
 
     void Preprocess::on_point_cloud_callback(const std::vector<common::Point> &pointcloud) {
-        dense_points.clear();
-        dense_points.reserve(pointcloud.size());
+        intensive_points.clear();
+        intensive_points.reserve(pointcloud.size());
         filtered_points.clear();
         filtered_points.reserve(pointcloud.size());
         for (size_t i = 0; i < pointcloud.size(); i++) {
             const auto &point = pointcloud[i];
             if (point.timestamp >= last_timestamp_dense_point) {
-                dense_points.push_back(point);
+                intensive_points.push_back(point);
             }
             if (i % parameters->point_filter_num != 0) {
                 continue;
@@ -40,6 +40,7 @@ namespace small_point_lio {
         }
         if (parameters->space_downsample) {
             downsampler.voxelgrid_sampling(filtered_points, processed_pointcloud, parameters->space_downsample_leaf_size);
+            downsampler.voxelgrid_sampling(intensive_points, dense_points, 0.1);
         } else {
             processed_pointcloud = std::move(filtered_points);
         }

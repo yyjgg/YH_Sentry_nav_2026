@@ -24,9 +24,14 @@ namespace small_point_lio {
         double last_timestamp_dense_point = -1;
         double last_timestamp_imu = -1;
         voxelgrid_sampling::VoxelgridSampling downsampler;
-        std::vector<common::Point> filtered_points;
-        std::vector<common::Point> dense_points;
+        voxelgrid_sampling::VoxelgridSampling downsamplerworld;
+        // 用于里程计滤波的点云
+        std::vector<common::Point> filtered_points;               
         std::vector<common::Point> processed_pointcloud;
+        // 用于建图点云
+        std::vector<common::Point> intensive_points;
+        std::vector<common::Point> dense_points;
+        
 
     public:
         Preprocess() = default;

@@ -23,7 +23,7 @@ small_point_lio:
     ros__parameters:
         lidar_topic: /livox/lidar # LiDAR topic name
         imu_topic: /livox/imu # IMU topic name
-        save_pcd: false # Whether to save point cloud
+        save_pcd: true # Whether to save point cloud
 
         # Point Cloud Filtering
         point_filter_num: 1 # keep one point every N points

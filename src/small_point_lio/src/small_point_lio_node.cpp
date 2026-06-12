@@ -68,7 +68,7 @@ namespace small_point_lio {
             odometry_msg.twist.twist.angular.x = odometry.angular_velocity.x();
             odometry_msg.twist.twist.angular.y = odometry.angular_velocity.y();
             odometry_msg.twist.twist.angular.z = odometry.angular_velocity.z();
-
+            
             geometry_msgs::msg::TransformStamped transform_stamped;
             transform_stamped.header.stamp = odometry_msg.header.stamp;
             transform_stamped.header.frame_id = "odom";
@@ -87,7 +87,7 @@ namespace small_point_lio {
             tf2::fromMsg(base_link_to_livox_frame_transform.transform, tf_base_link_to_livox_frame);
             tf2::Transform tf_odom_to_base_link = tf_base_link_to_livox_frame.inverse() * tf_lidar_odom_to_livox_frame * tf_base_link_to_livox_frame;
             transform_stamped.transform = tf2::toMsg(tf_odom_to_base_link);
-
+            // 发布TF,里程计
             tf_broadcaster->sendTransform(transform_stamped);
             odometry_publisher->publish(odometry_msg);
         });
@@ -124,6 +124,7 @@ namespace small_point_lio {
                         if ((point.tag & 0b010000) != 0b00000000 || (point.tag & 0b00001100) != 0b00000000 || (point.tag & 0b00000011) != 0b00000000) {
                             continue;
                         }
+                        if (sqrt(point.x*point.x+point.y*point.y+point.z*point.z)<0.3) continue;
                         new_point.position << point.x, point.y, point.z;
                         new_point.timestamp = static_cast<double>(msg.timebase + point.offset_time) * 1e-9;
                         pointcloud.push_back(new_point);
