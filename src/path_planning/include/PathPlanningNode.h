@@ -77,6 +77,8 @@ private:
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
     // 地图的发布器
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_publisher_;
+    // 静态PCD点云可视化发布器
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr static_pcd_publisher_;
     // 走廊的发布器
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr corridor_publisher_;
     // 可视化栅格的发布器

@@ -79,6 +79,9 @@ PathPlanningNode::PathPlanningNode() : Node("path_planning_node") {
  
     // 发布栅格地图话题
     map_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/obstacle_grid_map", 10);
+    static_pcd_publisher_ =
+        this->create_publisher<sensor_msgs::msg::PointCloud2>(
+            "/static_pcd_cloud", rclcpp::QoS(1).transient_local().reliable());
 
     // 创建安全走廊可视化发布器
     corridor_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/safe_corridors", 10);
@@ -684,7 +687,7 @@ void PathPlanningNode::loadGlobalMapFromPCD(){
     // 优先从已安装/共享目录加载包资源；如果找不到则回退到相对路径
     std::string pcd_file_path;
     auto share_dir = ament_index_cpp::get_package_share_directory("small_point_lio");
-    pcd_file_path = share_dir + "/pcd/RMUC2026.pcd";
+    pcd_file_path = share_dir + "/pcd/RMUL2026-xyz.pcd";
      
     if (pcl::io::loadPCDFile<pcl::PointXYZ>(pcd_file_path, *cloud) == -1) {
         RCLCPP_ERROR(this->get_logger(), "Couldn't read file %s", pcd_file_path.c_str());
@@ -692,6 +695,9 @@ void PathPlanningNode::loadGlobalMapFromPCD(){
     }
     
     RCLCPP_INFO(this->get_logger(), "Loaded %lu points from PCD file", cloud->size());
+
+    std::vector<pcl::PointXYZ> visualized_points;
+    visualized_points.reserve(cloud->size());
 
     // 初始化xyz坐标范围
     double min_x = std::numeric_limits<double>::max();
@@ -702,23 +708,32 @@ void PathPlanningNode::loadGlobalMapFromPCD(){
     double max_z = std::numeric_limits<double>::lowest();
     // 遍历点云数据，将点投影到2D栅格地图上
     for (const auto& point : cloud->points) {
+        // RMUL2026-xyz.pcd 使用毫米单位，导入后统一转换为米。
+        const double point_x_m = static_cast<double>(point.x) / 1000.0;
+        const double point_y_m = static_cast<double>(point.y) / 1000.0;
+        const double point_z_m = static_cast<double>(point.z) / 1000.0;
+
         // 更新x，y，z的最大值和最小值
-        min_x = std::min(min_x, static_cast<double>(point.x));
-        max_x = std::max(max_x, static_cast<double>(point.x));
-        min_y = std::min(min_y, static_cast<double>(point.y));
-        max_y = std::max(max_y, static_cast<double>(point.y));
-        min_z = std::min(min_z, static_cast<double>(point.z));
-        max_z = std::max(max_z, static_cast<double>(point.z));
-        // 只处理z轴在0.1m到1m范围内的点
-        if (- point.z > global_z_min && - point.z < global_z_max) {
+        min_x = std::min(min_x, point_x_m);
+        max_x = std::max(max_x, point_x_m);
+        min_y = std::min(min_y, point_y_m);
+        max_y = std::max(max_y, point_y_m);
+        min_z = std::min(min_z, point_z_m);
+        max_z = std::max(max_z, point_z_m);
+        // 只处理高度范围内的点
+        if (point_z_m > global_z_min && point_z_m < global_z_max) {
             // 将点云坐标转换为栅格坐标
-            int grid_x = static_cast<int>((point.x + maptransform_x_)  * resolution );
-            int grid_y = static_cast<int>((point.y + maptransform_y_)  * resolution );
+            int grid_x = static_cast<int>((point_x_m + maptransform_x_) * resolution);
+            int grid_y = static_cast<int>((point_y_m + maptransform_y_) * resolution);
             
             // 检查坐标是否在地图范围内
             if (grid_map_->isWithinBounds(grid_x, grid_y)) {
                 // 设置为障碍物
                 grid_map_->setObstacle(grid_x, grid_y, true);
+                visualized_points.emplace_back(
+                    static_cast<float>(point_x_m + maptransform_x_),
+                    static_cast<float>(point_y_m + maptransform_y_),
+                    static_cast<float>(point_z_m));
                 // 记录为静态障碍，后续局部刷新不应清除
                 int64_t key = (static_cast<int64_t>(grid_x) << 32) | static_cast<uint32_t>(grid_y);
                 static_obstacles_set_.insert(key);
@@ -727,6 +742,26 @@ void PathPlanningNode::loadGlobalMapFromPCD(){
     }
     RCLCPP_INFO(this->get_logger(), "Point cloud XYZ range: X(%.2f ~ %.2f), Y(%.2f ~ %.2f), Z(%.2f ~ %.2f)", 
                 min_x, max_x, min_y, max_y, min_z, max_z);
+
+    sensor_msgs::msg::PointCloud2 static_pcd_msg;
+    static_pcd_msg.header.stamp = this->now();
+    static_pcd_msg.header.frame_id = "map";
+    sensor_msgs::PointCloud2Modifier modifier(static_pcd_msg);
+    modifier.setPointCloud2FieldsByString(1, "xyz");
+    modifier.resize(visualized_points.size());
+
+    sensor_msgs::PointCloud2Iterator<float> output_x(static_pcd_msg, "x");
+    sensor_msgs::PointCloud2Iterator<float> output_y(static_pcd_msg, "y");
+    sensor_msgs::PointCloud2Iterator<float> output_z(static_pcd_msg, "z");
+    for (const auto& point : visualized_points) {
+        *output_x = point.x;
+        *output_y = point.y;
+        *output_z = point.z;
+        ++output_x;
+        ++output_y;
+        ++output_z;
+    }
+    static_pcd_publisher_->publish(static_pcd_msg);
 
     RCLCPP_INFO(this->get_logger(), "Global map loaded from PCD file and converted to occupancy grid");
 

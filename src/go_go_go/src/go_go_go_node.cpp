@@ -136,7 +136,7 @@ private:
                 break;
                 
             case 1:
-                RCLCPP_INFO(this->get_logger(), "Received command 1: Return to origin point");
+                RCLCPP_INFO(this->get_logger(), "Received command 1: Return to sign point");
                 if (!goal_reached_ || last_cmd_ != 1) {
                     publishGoal(origin_x_, origin_y_);
                 }
@@ -146,7 +146,7 @@ private:
                 break;
       
             case 2:
-                RCLCPP_INFO(this->get_logger(), "Received command 2: Go to sign point");
+                RCLCPP_INFO(this->get_logger(), "Received command 2: Go to origin point");
                 if (!goal_reached_ || last_cmd_ != 2) {
                     publishGoal(sign_x_, sign_y_);
                 }
@@ -156,42 +156,42 @@ private:
                 break;
             case 3:
                 RCLCPP_INFO(this->get_logger(), "Received command 3: Go to left patrol point");
-                if (!goal_reached_ || last_cmd_ != 3) {
-                    publishGoal(left_patrol_x_, left_patrol_y_);
-                }
-                if (traj_matrix_.rows() != 0) {
-                    last_cmd_ = 3;  // 更新最后命令
-                }
+                // if (!goal_reached_ || last_cmd_ != 3) {
+                //     publishGoal(left_patrol_x_, left_patrol_y_);
+                // }
+                // if (traj_matrix_.rows() != 0) {
+                //     last_cmd_ = 3;  // 更新最后命令
+                // }
                 break;
             case 4:
                 RCLCPP_INFO(this->get_logger(), "Received command 4: Go to right patrol point");
                 // RCLCPP_INFO(this->get_logger(), "Current goal_reached status: %s", goal_reached_ ? "true" : "false");
-                if (!goal_reached_ || last_cmd_ != 4) {
-                    publishGoal(right_patrol_x_, right_patrol_y_);
-                }
-                if (traj_matrix_.rows() != 0) {
-                    last_cmd_ = 4;  // 更新最后命令
-                }
+                // if (!goal_reached_ || last_cmd_ != 4) {
+                //     publishGoal(right_patrol_x_, right_patrol_y_);
+                // }
+                // if (traj_matrix_.rows() != 0) {
+                //     last_cmd_ = 4;  // 更新最后命令
+                // }
                 break;
             case 5:
                 RCLCPP_INFO(this->get_logger(), "Received command 5: Go to back patrol point ");
-                if (!goal_reached_ || last_cmd_ != 5) {
-                    publishGoal(back_patrol_x_, back_patrol_y_);
-                }
-                if (traj_matrix_.rows() != 0) {
-                    last_cmd_ = 5;  // 更新最后命令
-                }
+                // if (!goal_reached_ || last_cmd_ != 5) {
+                //     publishGoal(back_patrol_x_, back_patrol_y_);
+                // }
+                // if (traj_matrix_.rows() != 0) {
+                //     last_cmd_ = 5;  // 更新最后命令
+                // }
                 break;   
             case 6:
                 RCLCPP_INFO(this->get_logger(), "Received command 6: Go to front patrol point");
-                if (!goal_reached_ || last_cmd_ != 6) {
-                    publishGoal(front_patrol_x_, front_patrol_y_);
-                    // goal_reached_ = false;  // 重置到达状态
-                    // last_traj_index_ = 0;   // 重置轨迹索引
-                }
-                if (traj_matrix_.rows() != 0) {
-                    last_cmd_ = 6;  // 更新最后命令
-                }
+                // if (!goal_reached_ || last_cmd_ != 6) {
+                //     publishGoal(front_patrol_x_, front_patrol_y_);
+                //     // goal_reached_ = false;  // 重置到达状态
+                //     // last_traj_index_ = 0;   // 重置轨迹索引
+                // }
+                // if (traj_matrix_.rows() != 0) {
+                //     last_cmd_ = 6;  // 更新最后命令
+                // }
                 break;
             
             case 7:

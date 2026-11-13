@@ -68,9 +68,9 @@ def generate_launch_description():
         executable="static_transform_publisher",
         arguments=[
             "--x",
-            "3.5",
+            "1.6",
             "--y",
-            "7.5",
+            "7.2",
             "--z",
             "0.0",
             "--roll",
