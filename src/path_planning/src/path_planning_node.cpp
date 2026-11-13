@@ -368,7 +368,17 @@ void PathPlanningNode::pointcloudCallback(const sensor_msgs::msg::PointCloud2::S
         grid_map_->history.push_back(dynamic_obstacles);
     }
 
-    
+    if (has_goal_ && !replan_pending_) {
+        replan_pending_ = true;
+        RCLCPP_DEBUG(this->get_logger(),
+                     "Replanning after point cloud map update from (%d, %d) to goal (%d, %d)",
+                     static_cast<int>(current_position_.x),
+                     static_cast<int>(current_position_.y),
+                     static_cast<int>(current_goal_.x),
+                     static_cast<int>(current_goal_.y));
+        planPath(current_position_, current_goal_);
+        replan_pending_ = false;
+    }
 }
 
 // 设置目标
@@ -455,21 +465,11 @@ void PathPlanningNode::planPath(const MapNode& start, const MapNode& goal) {
         // 发布安全走廊可视化
         publishCorridors(corridors);
 
-        Eigen::Vector2d initial_velocity = Eigen::Vector2d::Zero();
-        Eigen::Vector2d initial_acceleration = Eigen::Vector2d::Zero();
-        if (has_motion_state_) {
-            // TrajOpt uses grid units, while the stored motion state uses SI units.
-            initial_velocity = current_velocity_map_ * resolution;
-        }
-        if (has_acceleration_state_) {
-            initial_acceleration = current_acceleration_map_ * resolution;
-        }
-
         auto traj = trajopt->Planning(
             path,
             corridors,
-            initial_velocity,
-            initial_acceleration);
+            Eigen::Vector2d::Zero(),
+            Eigen::Vector2d::Zero());
         active_trajectory_ = traj;
         has_active_trajectory_ = !active_trajectory_.empty();
 
