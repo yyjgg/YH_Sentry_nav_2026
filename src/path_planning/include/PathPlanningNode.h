@@ -4,6 +4,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
+#include "geometry_msgs/msg/accel_with_covariance_stamped.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"  
 #include "nav_msgs/msg/occupancy_grid.hpp"
@@ -32,6 +33,9 @@ private:
     void initializeOdomToMapTransform();
     // 设置起点
     void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
+    // 接收Point-LIO估计的线性加速度
+    void accelerationCallback(
+        const geometry_msgs::msg::AccelWithCovarianceStamped::SharedPtr msg);
     // 设置障碍物
     void pointcloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
     // 设置目标
@@ -63,6 +67,7 @@ private:
     
     // 订阅器
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_subscriber_;
+    rclcpp::Subscription<geometry_msgs::msg::AccelWithCovarianceStamped>::SharedPtr acceleration_subscriber_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_subscriber_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_subscriber_;
     // 订阅来自go_go_go节点的MPC轨迹速度信息
@@ -90,6 +95,19 @@ private:
 
     // 地图相关
     MapNode current_position_;                               // 起点
+    Eigen::Vector2d current_position_map_ = Eigen::Vector2d::Zero(); // 实际位置，单位：m
+    Eigen::Vector2d current_velocity_map_ = Eigen::Vector2d::Zero(); // 当前速度，单位：m/s
+    Eigen::Vector2d current_acceleration_map_ = Eigen::Vector2d::Zero(); // Point-LIO估计加速度，单位：m/s^2
+    bool has_motion_state_ = false;
+    bool has_acceleration_state_ = false;
+
+    MapNode current_goal_;
+    bool has_goal_ = false;
+    std::vector<TrajOpt::Sample> active_trajectory_;
+    bool has_active_trajectory_ = false;
+    rclcpp::Time last_replan_time_;
+    bool replan_pending_ = false;
+
     float resolution = 10;                                   // 分辨率即放大倍数
     double odom_to_map_x, odom_to_map_y, odom_to_map_yaw;     // odom->map变换参数
     double maptransform_x_, maptransform_y_;     // globalmap->pointcloudmap的平移对齐微调

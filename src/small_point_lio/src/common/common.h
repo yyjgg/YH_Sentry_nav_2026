@@ -14,6 +14,7 @@ namespace common {
         double timestamp;                // 时间戳（秒）
         Eigen::Vector3d position;        // 位置（米）
         Eigen::Vector3d velocity;        // 速度（米/秒）
+        Eigen::Vector3d acceleration;    // 世界/odom坐标系线性加速度（米/秒^2）
         Eigen::Quaterniond orientation;  // 姿态（四元数，弧度）
         Eigen::Vector3d angular_velocity;// 角速度（弧度/秒）
     };

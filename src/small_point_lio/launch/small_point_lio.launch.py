@@ -1,10 +1,15 @@
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    enable_mapping_visualization = LaunchConfiguration(
+        "enable_mapping_visualization")
+
     small_point_lio_node = Node(
         package="small_point_lio",
         executable="small_point_lio_node",
@@ -17,7 +22,11 @@ def generate_launch_description():
                     "config",
                     "mid360.yaml",
                 ]
-            )
+            ),
+            {
+                "enable_mapping_visualization":
+                    enable_mapping_visualization,
+            },
         ],
     )
 
@@ -44,4 +53,12 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([small_point_lio_node, static_base_link_to_livox_frame])
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            "enable_mapping_visualization",
+            default_value="false",
+            description="Enable mapping point cloud and path visualization",
+        ),
+        small_point_lio_node,
+        static_base_link_to_livox_frame,
+    ])

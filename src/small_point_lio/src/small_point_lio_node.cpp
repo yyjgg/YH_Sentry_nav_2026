@@ -17,9 +17,29 @@ namespace small_point_lio {
         std::string lidar_topic = declare_parameter<std::string>("lidar_topic");
         std::string imu_topic = declare_parameter<std::string>("imu_topic");
         bool save_pcd = declare_parameter<bool>("save_pcd");
+        enable_mapping_visualization_ =
+            declare_parameter<bool>("enable_mapping_visualization");
+        mapping_visualization_leaf_size_ =
+            declare_parameter<double>("mapping_visualization_leaf_size");
         small_point_lio = std::make_unique<small_point_lio::SmallPointLio>(*this);
         odometry_publisher = create_publisher<nav_msgs::msg::Odometry>("/Odometry", 1000);
+        acceleration_publisher =
+            create_publisher<geometry_msgs::msg::AccelWithCovarianceStamped>(
+                "/Acceleration", 1000);
         pointcloud_publisher = create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered", 1000);
+        if (enable_mapping_visualization_) {
+            mapping_cloud_publisher_ =
+                create_publisher<sensor_msgs::msg::PointCloud2>(
+                    "/mapping_cloud", 10);
+            mapping_path_publisher_ =
+                create_publisher<nav_msgs::msg::Path>("/mapping_path", 10);
+            mapping_visualization_timer_ = create_wall_timer(
+                std::chrono::milliseconds(500),
+                std::bind(
+                    &SmallPointLioNode::publish_mapping_visualization,
+                    this));
+            mapping_path_.header.frame_id = "odom";
+        }
         tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
         tf_buffer = std::make_unique<tf2_ros::Buffer>(get_clock());
         tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
@@ -68,6 +88,12 @@ namespace small_point_lio {
             odometry_msg.twist.twist.angular.x = odometry.angular_velocity.x();
             odometry_msg.twist.twist.angular.y = odometry.angular_velocity.y();
             odometry_msg.twist.twist.angular.z = odometry.angular_velocity.z();
+
+            geometry_msgs::msg::AccelWithCovarianceStamped acceleration_msg;
+            acceleration_msg.header = odometry_msg.header;
+            acceleration_msg.accel.accel.linear.x = odometry.acceleration.x();
+            acceleration_msg.accel.accel.linear.y = odometry.acceleration.y();
+            acceleration_msg.accel.accel.linear.z = odometry.acceleration.z();
             
             geometry_msgs::msg::TransformStamped transform_stamped;
             transform_stamped.header.stamp = odometry_msg.header.stamp;
@@ -90,6 +116,15 @@ namespace small_point_lio {
             // 发布TF,里程计
             tf_broadcaster->sendTransform(transform_stamped);
             odometry_publisher->publish(odometry_msg);
+            acceleration_publisher->publish(acceleration_msg);
+
+            if (enable_mapping_visualization_) {
+                geometry_msgs::msg::PoseStamped pose;
+                pose.header = odometry_msg.header;
+                pose.pose = odometry_msg.pose.pose;
+                mapping_path_.header.stamp = odometry_msg.header.stamp;
+                mapping_path_.poses.push_back(pose);
+            }
         });
         small_point_lio->set_pointcloud_callback([this, save_pcd](const std::vector<Eigen::Vector3f> &pointcloud) {
             if (pointcloud_publisher->get_subscription_count() > 0) {
@@ -111,6 +146,12 @@ namespace small_point_lio {
             }
             if (save_pcd) {
                 pointcloud_to_save.insert(pointcloud_to_save.end(), pointcloud.begin(), pointcloud.end());
+            }
+            if (enable_mapping_visualization_) {
+                mapping_pointcloud_.insert(
+                    mapping_pointcloud_.end(),
+                    pointcloud.begin(),
+                    pointcloud.end());
             }
         });
         pointcloud_subsciber = create_subscription<livox_ros_driver2::msg::CustomMsg>(
@@ -143,6 +184,38 @@ namespace small_point_lio {
                     small_point_lio->on_imu_callback(imu_msg);
                     small_point_lio->handle_once();
                 });
+    }
+
+    void SmallPointLioNode::publish_mapping_visualization() {
+        if (!enable_mapping_visualization_) {
+            return;
+        }
+
+        voxelgrid_sampling::VoxelgridSampling downsampler;
+        std::vector<Eigen::Vector3f> downsampled;
+        downsampler.voxelgrid_sampling_omp(
+            mapping_pointcloud_,
+            downsampled,
+            mapping_visualization_leaf_size_);
+
+        pcl::PointCloud<pcl::PointXYZ> pcl_pointcloud;
+        pcl_pointcloud.reserve(downsampled.size());
+        for (const auto &point : downsampled) {
+            pcl::PointXYZ pcl_point;
+            pcl_point.x = point.x();
+            pcl_point.y = point.y();
+            pcl_point.z = point.z();
+            pcl_pointcloud.push_back(pcl_point);
+        }
+
+        sensor_msgs::msg::PointCloud2 cloud_msg;
+        pcl::toROSMsg(pcl_pointcloud, cloud_msg);
+        cloud_msg.header.stamp = this->now();
+        cloud_msg.header.frame_id = "odom";
+        mapping_cloud_publisher_->publish(std::move(cloud_msg));
+
+        mapping_path_.header.stamp = this->now();
+        mapping_path_publisher_->publish(mapping_path_);
     }
 
 }// namespace small_point_lio

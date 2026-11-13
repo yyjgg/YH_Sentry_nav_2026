@@ -183,6 +183,10 @@ namespace small_point_lio {
             // odometry.angular_velocity = R_lidar_to_base_link * estimator.kf.x.omg;
             odometry.position =  estimator.kf.x.position;
             odometry.velocity =  estimator.kf.x.velocity;
+            // 将IMU本体坐标系加速度转换为odom坐标系实际线性加速度。
+            odometry.acceleration =
+                estimator.kf.x.rotation * estimator.kf.x.acceleration
+                + estimator.kf.x.gravity;
             odometry.orientation = estimator.kf.x.rotation;
             odometry.angular_velocity = estimator.kf.x.omg;
             odometry_callback(odometry);

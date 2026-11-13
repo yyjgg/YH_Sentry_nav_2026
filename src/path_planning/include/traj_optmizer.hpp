@@ -63,7 +63,11 @@ private:
     
 public:
     // planning
-    std::vector<Sample> Planning(std::vector<Eigen::Vector2d> path, std::vector<SafeTravelCorridor2D::Polyhedron2D>& corridors){
+    std::vector<Sample> Planning(
+        std::vector<Eigen::Vector2d> path,
+        std::vector<SafeTravelCorridor2D::Polyhedron2D>& corridors,
+        const Eigen::Vector2d& initialVelocity,
+        const Eigen::Vector2d& initialAcceleration) {
         if (path.size() < 2 || corridors.empty()) {
             return {};
         }
@@ -76,7 +80,19 @@ public:
         const double adaptiveLengthPerPiece = std::max(pathLength / targetPieces, 1.0);
 
  
-        setup(1.0, path[0], path.back(), corridors, adaptiveLengthPerPiece, 0.5, 2, 1.0, 100.0, 100.0);
+        setup(
+            1.0,
+            path[0],
+            path.back(),
+            initialVelocity,
+            initialAcceleration,
+            corridors,
+            adaptiveLengthPerPiece,
+            0.5,
+            2,
+            1.0,
+            100.0,
+            100.0);
         minco.setConditions(headPVA, tailPVA, pieceN);
         Trajectory<5> traj;
         optimize(traj);
@@ -120,6 +136,8 @@ public:
     inline bool setup(const double &timeWeight,
                       const Eigen::Vector2d &initialPoint,
                       const Eigen::Vector2d &terminalPoint,
+                      const Eigen::Vector2d &initialVelocity,
+                      const Eigen::Vector2d &initialAcceleration,
                       const std::vector<SafeTravelCorridor2D::Polyhedron2D> &safeCorridor,
                       const double &lengthPerPiece,
                       const double &smoothingFactor,
@@ -132,6 +150,8 @@ public:
         headPVA.setZero();
         tailPVA.setZero();
         headPVA.col(0) = initialPoint;
+        headPVA.col(1) = initialVelocity;
+        headPVA.col(2) = initialAcceleration;
         tailPVA.col(0) = terminalPoint;
 
         safecorridors = safeCorridor;

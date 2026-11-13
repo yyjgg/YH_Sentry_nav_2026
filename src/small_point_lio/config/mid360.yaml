@@ -3,6 +3,8 @@ small_point_lio:
         lidar_topic: /livox/lidar                  # 点云话题名
         imu_topic: /livox/imu                      # IMU话题名
         save_pcd: true                            # 是否保存点云
+        enable_mapping_visualization: false       # 是否发布独立建图可视化，建图的时候打开
+        mapping_visualization_leaf_size: 0.1      # 建图可视化点云降采样体素大小（米）
 
         # 点云过滤
         point_filter_num: 1                        # 多少个点取一个点

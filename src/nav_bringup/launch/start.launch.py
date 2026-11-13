@@ -25,7 +25,10 @@ def generate_launch_description():
                 'launch',
                 'small_point_lio.launch.py' 
             ])
-        ])
+        ]),
+        launch_arguments={
+            'enable_mapping_visualization': 'false',
+        }.items(),
     )
     
     # 包含path_planning

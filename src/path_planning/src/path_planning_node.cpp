@@ -50,7 +50,21 @@ PathPlanningNode::PathPlanningNode() : Node("path_planning_node") {
     odometry_subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "/Odometry", 10,
         std::bind(&PathPlanningNode::odometryCallback, this, std::placeholders::_1));
-    
+    /*odometry callback 基本逻辑是将slam里程计估计的当前的平面位置映射到map坐标系下，然后做基本的边界
+    和障碍物和碰撞障碍物判断。
+    !!! 可能存在的问题：如果里程计估计位置超出地图设定边界，是否超出代码边界
+    */
+
+    // 订阅Point-LIO发布的线性加速度
+    acceleration_subscriber_ =
+        this->create_subscription<
+            geometry_msgs::msg::AccelWithCovarianceStamped>(
+            "/Acceleration", 10,
+            std::bind(
+                &PathPlanningNode::accelerationCallback,
+                this,
+                std::placeholders::_1));
+
     // 订阅PointCloud2话题
     pointcloud_subscriber_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "/cloud_registered", 10,
@@ -149,8 +163,20 @@ void PathPlanningNode::initializeOdomToMapTransform() {
 // 设置起点（机器人自身位置）
 void PathPlanningNode::odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
     // 将odom坐标系下的位置转换到map坐标系
-    double raw_x = msg->pose.pose.position.x + odom_to_map_x;
+    // TODO: 使用完整的 odom->map 旋转+平移变换；当前保持原有的仅平移逻辑。
+    double raw_x = msg->pose.pose.position.x + odom_to_map_x; //map 下的机器人当前x y位置，当前实现默认map 和 odom坐标系无rotation变换
     double raw_y = msg->pose.pose.position.y + odom_to_map_y;
+
+    current_position_map_ = Eigen::Vector2d(raw_x, raw_y);
+
+    // small_point_lio 当前直接发布 estimator.kf.x.velocity。
+    // 该状态定义为世界/odom系速度；这里暂按当前工程的无旋转约定使用，当前采用odometry 和 map人为规定方向对齐
+    // TODO: 完成 odom->map 旋转后，同步旋转速度和加速度。
+    const Eigen::Vector2d velocity_map(
+        msg->twist.twist.linear.x,
+        msg->twist.twist.linear.y);
+    current_velocity_map_ = velocity_map;
+    has_motion_state_ = true;
     
     // 转换为栅格坐标
     int grid_x = static_cast<int>(raw_x * resolution);
@@ -198,6 +224,16 @@ void PathPlanningNode::odometryCallback(const nav_msgs::msg::Odometry::SharedPtr
         current_position_.y = grid_y;
     }
 }
+
+void PathPlanningNode::accelerationCallback(
+    const geometry_msgs::msg::AccelWithCovarianceStamped::SharedPtr msg) {
+    // small_point_lio 当前发布的是 odom 坐标系下的线性加速度。
+    // TODO: 完成 odom->map 旋转后，同步旋转这里的加速度。
+    current_acceleration_map_.x() = msg->accel.accel.linear.x;
+    current_acceleration_map_.y() = msg->accel.accel.linear.y;
+    has_acceleration_state_ = true;
+}
+
 // 设置局部地图障碍物
 void PathPlanningNode::pointcloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     // 检查是否是第一次接收到点云消息
@@ -224,6 +260,7 @@ void PathPlanningNode::pointcloudCallback(const sensor_msgs::msg::PointCloud2::S
         // 检查z坐标是否在0.1m到1m范围内
         if (*iter_z > local_z_min && *iter_z < local_z_max) {
             // 将odom坐标系下的点云坐标转换到map坐标系
+            // TODO: 使用完整的 odom->map 旋转+平移变换；当前保持原有的仅平移逻辑。
             double map_x = *iter_x + odom_to_map_x;
             double map_y = *iter_y + odom_to_map_y;
             
@@ -338,6 +375,8 @@ void PathPlanningNode::pointcloudCallback(const sensor_msgs::msg::PointCloud2::S
 void PathPlanningNode::goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
     // 处理新的目标点（目标点已经在map坐标系下）
     MapNode goal(msg->pose.position.x * resolution, msg->pose.position.y * resolution);
+    current_goal_ = goal;
+    has_goal_ = true;
 
     double goal_map_x = goal.x / resolution;
     double goal_map_y = goal.y / resolution;
@@ -416,13 +455,31 @@ void PathPlanningNode::planPath(const MapNode& start, const MapNode& goal) {
         // 发布安全走廊可视化
         publishCorridors(corridors);
 
-        auto traj = trajopt->Planning(path,corridors);
+        Eigen::Vector2d initial_velocity = Eigen::Vector2d::Zero();
+        Eigen::Vector2d initial_acceleration = Eigen::Vector2d::Zero();
+        if (has_motion_state_) {
+            // TrajOpt uses grid units, while the stored motion state uses SI units.
+            initial_velocity = current_velocity_map_ * resolution;
+        }
+        if (has_acceleration_state_) {
+            initial_acceleration = current_acceleration_map_ * resolution;
+        }
+
+        auto traj = trajopt->Planning(
+            path,
+            corridors,
+            initial_velocity,
+            initial_acceleration);
+        active_trajectory_ = traj;
+        has_active_trajectory_ = !active_trajectory_.empty();
 
         // 发布简化后的路径/轨迹可视化（traj 现在包含位置+速度+时间）
         publishTraj(traj);
         // publishPath(path);
 
     } else {
+        active_trajectory_.clear();
+        has_active_trajectory_ = false;
         RCLCPP_WARN(this->get_logger(), "No path found from (%f, %f) to (%f, %f)", 
                     start.x, start.y, goal.x, goal.y);
     
